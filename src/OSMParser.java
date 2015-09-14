@@ -6,23 +6,23 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
-import java.util.HashMap;
 import java.util.LinkedList;
-import java.util.Map;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.Vector;
 
 //test
 
 public class OSMParser {
 
-	private static Map<Long, Long> neededNodesIds = new HashMap<Long, Long>();
-	private static Map<Long, Long> neededWaysIds = new HashMap<Long, Long>();
+	private static TreeSet<Long> neededNodesIds = new TreeSet<Long>();
+	private static TreeSet<Long> neededWaysIds = new TreeSet<Long>();
 
-	private static Map<Long, Long> allIds = new HashMap<Long, Long>();
+	private static TreeMap<Long, Long> allIds = new TreeMap<Long, Long>();
 
-	private static Map<Double, Map<Double, Double>> nodeGps = new HashMap<Double, Map<Double, Double>>();
+	private static TreeMap<Double, TreeMap<Double, Double>> nodeGps = new TreeMap<Double, TreeMap<Double, Double>>();
 
-	private static Map<Long, Map<Long, Long>> allWayParts = new HashMap<Long, Map<Long, Long>>();
+	private static TreeMap<Long, TreeMap<Long, Long>> allWayParts = new TreeMap<Long, TreeMap<Long, Long>>();
 
 	private static String [] highwayTypes = {"motorway","motorway_link","motorway_junction","trunk","trunk_link",
 		"primary","primary_link","primary_trunk","secondary","secondary_link",
@@ -37,7 +37,6 @@ public class OSMParser {
 
 	private static final int DEFAULT=0x00;
 	private static final int CAR=0x01;
-	private static final int TRAM=0x02;
 	
 	private static int meansOfTransport = OSMParser.DEFAULT;
 
@@ -51,7 +50,6 @@ public class OSMParser {
 	private static double minlon = Double.MAX_VALUE;
 	private static double maxlon = -Double.MAX_VALUE;
 	
-
 	public static void main(String[] args) {
 
 		// check args
@@ -61,7 +59,6 @@ public class OSMParser {
 		
 		Vector<Double> lats = new Vector<Double>();
 		Vector<Double> lons = new Vector<Double>();
-		
 		
 		double disOffset = 0.01;
 		
@@ -104,6 +101,9 @@ public class OSMParser {
 			printParameterInfo();
 			System.exit(-1);
 		}
+		// args are OK!
+		
+		
 		
 		for (int i = 0; i < gpsFiles.size(); i++) {
 			scanGPSFile(gpsFiles.get(i));
@@ -154,7 +154,6 @@ public class OSMParser {
 		System.out.println("");
 	}
 
-	
 	public static void scanGPSFile(String FilePathGPS) {
 		
 		try {
@@ -278,10 +277,10 @@ public class OSMParser {
 	
 	public static nodeGps node_gps(nodeGps nGps) {
 		
-		Map<Double, Double> latMap = nodeGps.get(nGps.lat);
+		TreeMap<Double, Double> latMap = nodeGps.get(nGps.lat);
 		
 		if (latMap == null) {
-			latMap = new HashMap<Double, Double>();
+			latMap = new TreeMap<Double, Double>();
 			latMap.put(nGps.lon, nGps.lon);
 			
 			nodeGps.put(nGps.lat, latMap);
@@ -302,10 +301,10 @@ public class OSMParser {
 	}
 	
 	public static boolean isWayPartNew(Long from, Long to) {
-		Map<Long, Long> fromMap = allWayParts.get(from);
+		TreeMap<Long, Long> fromMap = allWayParts.get(from);
 		
 		if (fromMap == null) {
-			fromMap = new HashMap<Long, Long>();
+			fromMap = new TreeMap<Long, Long>();
 			fromMap.put(to, to);
 			
 			allWayParts.put(from, fromMap);
@@ -338,6 +337,7 @@ public class OSMParser {
 			
 			lineNR = 0;
 			
+			// count lines in file
 			fReader = new FileReader(FilePathIn);				
 			bReader = new BufferedReader( new InputStreamReader( new FileInputStream( new File( FilePathIn ) ), "UTF-8" ));
 			line = bReader.readLine();
@@ -353,9 +353,6 @@ public class OSMParser {
 			System.out.println("File has " + lineCount + " lines");
 			
 			fReader = new FileReader(FilePathIn);				
-			//fWriter = new FileWriter(FilePath.replace(".osm", ".klein.osm"));
-			
-			//bReader = new BufferedReader(fReader);
 			bReader = new BufferedReader( new InputStreamReader( new FileInputStream( new File( FilePathIn ) ), "UTF-8" ));
 				
 			lineNR = 0;
@@ -377,7 +374,7 @@ public class OSMParser {
 					
 					Long wayID = Long.parseLong(line.replace("<way id=\"", "").split("\"")[0]);						
 					
-					Map<Integer, Long> neededNodesIds_temp = new HashMap<Integer, Long>();
+					TreeMap<Integer, Long> neededNodesIds_temp = new TreeMap<Integer, Long>();
 					highway = "";
 					motorcar = "";
 					boolean building_yes = false;
@@ -430,13 +427,13 @@ public class OSMParser {
 							
 						if (getMeansOfTransportPermission(OSMParser.CAR)) {
 								
-							neededWaysIds.put(wayID, wayID);
+							neededWaysIds.add(wayID);
 															
 							for (int i = 0; i < neededNodesIds_temp.size(); i++) {
 									
 								long l = neededNodesIds_temp.get(i);
 									
-								neededNodesIds.put(l, l);
+								neededNodesIds.add(l);
 									
 							}
 								
@@ -480,7 +477,7 @@ public class OSMParser {
 					
 					long id = Long.parseLong(s);
 					
-					boolean write = neededNodesIds.containsKey(id);
+					boolean write = neededNodesIds.contains(id);
 					
 					if (write) {
 						nodeGps nGps = new nodeGps();
@@ -562,7 +559,7 @@ public class OSMParser {
 					
 					String s = tline.replace("<way id=\"", "").split("\"",2)[0];
 					long id = Long.parseLong(s);
-					boolean write = neededWaysIds.containsKey(id);
+					boolean write = neededWaysIds.contains(id);
 					
 					line = bReader.readLine();
 					lineNR++;
@@ -670,7 +667,7 @@ public class OSMParser {
 								
 								System.out.println("Info: skipping way: " + id + " : " + id1 + " -> " + id2);
 								
-							} else if ( neededNodesIds.containsKey(id1) && neededNodesIds.containsKey(id2) ) {
+							} else if ( neededNodesIds.contains(id1) && neededNodesIds.contains(id2) ) {
 								
 								if (is_oneway == false) {
 
@@ -678,7 +675,6 @@ public class OSMParser {
 
 									boolean newWayPartRueck = isWayPartNew(id2, id1);
 
-									
 									if (newWayPartHin == true && newWayPartRueck == true) {
 										
 										String wlines[] = way1List.get(0).split("\"", 3);
