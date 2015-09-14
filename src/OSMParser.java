@@ -11,8 +11,6 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.Vector;
 
-//test
-
 public class OSMParser {
 
 	private static TreeSet<Long> neededNodesIds = new TreeSet<Long>();
@@ -49,6 +47,8 @@ public class OSMParser {
 	private static double maxlat = -Double.MAX_VALUE;
 	private static double minlon = Double.MAX_VALUE;
 	private static double maxlon = -Double.MAX_VALUE;
+	
+	public static Long newID = 1000000L;
 	
 	public static void main(String[] args) {
 
@@ -104,11 +104,12 @@ public class OSMParser {
 		// args are OK!
 		
 		
-		
+		// read GPS-Traces
 		for (int i = 0; i < gpsFiles.size(); i++) {
 			scanGPSFile(gpsFiles.get(i));
 		}
 		
+		// set map boundaries for size filter
 		if (gpsFiles.size() == 0 && lats.size() == 0) {
 			OSMParser.minlat = -Double.MAX_VALUE;
 			OSMParser.maxlat = Double.MAX_VALUE;
@@ -138,10 +139,14 @@ public class OSMParser {
 			OSMParser.maxlon = OSMParser.maxlon + disOffset;
 		}
 				
+		// start parsing
 		OSMParser.doWork(osmInFile, osmOutFile);
 
 	}
 
+	/**
+	 * print description of args for user
+	 */
 	public static void printParameterInfo() {
 		System.out.println("");
 		System.out.println("Parameter: ");
@@ -154,6 +159,10 @@ public class OSMParser {
 		System.out.println("");
 	}
 
+	/**
+	 * read the GPS Trace file and check the max / min GPS coordinates for map boundaries for size filter
+	 * @param FilePathGPS path of GPS Trace file
+	 */
 	public static void scanGPSFile(String FilePathGPS) {
 		
 		try {
@@ -234,6 +243,10 @@ public class OSMParser {
 		}
 	}
 	
+	/**
+	 * search after "used" id and save them in allIds
+	 * @param line XML line from OSM file
+	 */
 	public static void scanIds(String line) {
 
 		if (line != null) {
@@ -255,8 +268,12 @@ public class OSMParser {
 		}
 	}
 
-	public static Long newID = 1000000L;
 
+
+	/**
+	 * create new unique id
+	 * @return new unique id
+	 */
 	public static Long getNewId() {
 
 		int i;
@@ -275,7 +292,14 @@ public class OSMParser {
 		return -1L;
 	}
 	
-	public static nodeGps node_gps(nodeGps nGps) {
+	/**
+	 * check if GPS coordinates of nGps are unique
+	 * if not, create new node with unique GPS coordinates
+	 * 
+	 * @param nGps node to be checked
+	 * @return node with unique GPS coordinates
+	 */
+	public static nodeGps node_CheckCreateUniqueGps(nodeGps nGps) {
 		
 		TreeMap<Double, Double> latMap = nodeGps.get(nGps.lat);
 		
@@ -293,13 +317,18 @@ public class OSMParser {
 				nodeGps newnGps = new nodeGps();
 				newnGps.lon = nGps.lon;
 				newnGps.lat = nGps.lat + 0.00000001;
-				return node_gps(newnGps);
+				return node_CheckCreateUniqueGps(newnGps);
 			}
 		}
 		
 		return nGps;
 	}
 	
+	/**
+	 * @param from node id
+	 * @param to node id
+	 * @return true if wayPart beetwen from and to is new, else false
+	 */
 	public static boolean isWayPartNew(Long from, Long to) {
 		TreeMap<Long, Long> fromMap = allWayParts.get(from);
 		
@@ -321,6 +350,13 @@ public class OSMParser {
 		return false;
 	}
 
+	/**
+	 * parse the OSM file
+	 * read OSM file 3 times
+	 * 
+	 * @param FilePathIn path of osm file for reading
+	 * @param FilePathOutpath of new osm file for creating
+	 */
 	public static void doWork(String FilePathIn, String FilePathOut) {
 
 		BufferedReader bReader;
@@ -337,7 +373,11 @@ public class OSMParser {
 			
 			lineNR = 0;
 			
-			// count lines in file
+			// ##############################################
+			// ##############################################
+			// 1. Reading of osm file
+			// check the number of lines
+			
 			fReader = new FileReader(FilePathIn);				
 			bReader = new BufferedReader( new InputStreamReader( new FileInputStream( new File( FilePathIn ) ), "UTF-8" ));
 			line = bReader.readLine();
@@ -352,6 +392,13 @@ public class OSMParser {
 			
 			System.out.println("File has " + lineCount + " lines");
 			
+			// ##############################################
+			// ##############################################
+			// 2. Reading of osm file
+			// search all already used ids
+			// search and check ways, if they may be used for cars (save the way id)
+			// save needed node ids for ways for cars
+			
 			fReader = new FileReader(FilePathIn);				
 			bReader = new BufferedReader( new InputStreamReader( new FileInputStream( new File( FilePathIn ) ), "UTF-8" ));
 				
@@ -362,10 +409,14 @@ public class OSMParser {
 			
 			while (line != null) {
 
+				// search all already used ids
 				scanIds(line);
 
 				line = line.trim();
-								
+							
+				// start of reading way tag
+				// search and check way, if it may be used for cars
+				// read all required properties of way 
 				if (line.startsWith("<way id=\"") ) {
 					
 					meansOfTransport = OSMParser.DEFAULT;
@@ -425,10 +476,13 @@ public class OSMParser {
 							
 						set_meansOfTransport(wayID);
 							
+						// check ways, if they may be used for cars
 						if (getMeansOfTransportPermission(OSMParser.CAR)) {
 								
+							// save the way id of way for cars
 							neededWaysIds.add(wayID);
-															
+														
+							// save needed node ids for ways for cars
 							for (int i = 0; i < neededNodesIds_temp.size(); i++) {
 									
 								long l = neededNodesIds_temp.get(i);
@@ -453,11 +507,20 @@ public class OSMParser {
 			bReader.close();
 			fReader.close();
 			
+			
+			
+			// ##############################################
+			// ##############################################
+			// 3. Reading of osm file
+			// create new OSM file:
+			// check and make GPS coordinates of nodes unique
+			// split/copy way with n wayParts to n new ways
+			// check ony_way property : if oneway is "-1" turn over the way
+			
 			fReader = new FileReader(FilePathIn);
-			//bReader = new BufferedReader(fReader);
+			
 			bReader = new BufferedReader( new InputStreamReader( new FileInputStream( new File( FilePathIn ) ), "UTF-8" ));
 
-			//BufferedWriter bWriter = new BufferedWriter(fWriter);
 			BufferedWriter bWriter;
 			bWriter = new BufferedWriter( new OutputStreamWriter( new FileOutputStream( new File( FilePathOut ) ), "UTF-8" ));
 			
@@ -471,6 +534,8 @@ public class OSMParser {
 				
 				tline = line.trim();					
 				
+				// start of read node tag
+				// write this node tag only if it is needed (info of 2. reading: neededNodesIds)
 				if (tline.startsWith("<node id=\"")) {
 					
 					String s = tline.replace("<node id=\"", "").split("\"")[0];
@@ -490,14 +555,14 @@ public class OSMParser {
 						nodeGps nGpsNew = nGps;
 						
 						if (minlat <= nGps.lat && nGps.lat <= maxlat && minlon <= nGps.lon && nGps.lon <= maxlon) {
-							nGpsNew = node_gps(nGps);
+							// check and make GPS coordinates of nodes unique
+							nGpsNew = node_CheckCreateUniqueGps(nGps);
 						} else {
 							neededNodesIds.remove(id);
 							write = false;
 						}
 						
 						if (nGpsNew.lat != nGps.lat || nGpsNew.lon != nGps.lon ) {
-							
 							System.out.println("Info: Change gps of node: " + id + " : " + nGps.lat + " " + nGps.lon + " -> " + nGpsNew.lat + " " + nGpsNew.lon);
 							
 							oldLat = " lat=\"" + oldLat;
@@ -551,8 +616,11 @@ public class OSMParser {
 					}
 					
 				}
+				// start of read way tag
+				// write this way tag only if it is needed (info of 2. reading: neededWaysIds)
 				else if ( tline.startsWith("<way id=\"")) {
-
+					
+					// way1List: save all lines from "start way tag" until ref-Tag
 					LinkedList<String> way1List = new LinkedList<String>();
 					
 					way1List.add(line);
@@ -567,7 +635,7 @@ public class OSMParser {
 						System.out.println("writing new file: " + ((lineNR * 100) / lineCount) + " % ");
 					}
 					tline = line.trim();
-										
+
 					while(tline.startsWith("<nd ref=\"") == false) {
 						way1List.add(line);
 						
@@ -578,7 +646,8 @@ public class OSMParser {
 						}
 						tline = line.trim();
 					}
-										
+							
+					// way2List: save all lines with ref-Tag (nodes for wayParts)
 					LinkedList<String> way2List = new LinkedList<String>();
 					
 					while(tline.startsWith("<nd ref=\"") == true) {
@@ -592,6 +661,7 @@ public class OSMParser {
 						tline = line.trim();
 					}
 					
+					// way3List: save all lines with k-Tag (properties of way (e.g. one_way, speed, ...))
 					LinkedList<String> way3List = new LinkedList<String>();
 
 					while(tline.startsWith("<tag k=\"") == true) {
@@ -605,6 +675,7 @@ public class OSMParser {
 						tline = line.trim();
 					}
 					
+					// way4List: save all lines after "k-tag" to end of way tag
 					LinkedList<String> way4List = new LinkedList<String>();
 
 					while(tline.startsWith("</way>") == false) {
@@ -620,8 +691,11 @@ public class OSMParser {
 
 					way4List.add(line);
 					
+					// create for every wayPart one new way and save it to the new osm
+					// if oneway is "-1" turn over the way / list of nodes (wayParts)
 					if (write) {
 						
+						// check oneway property
 						boolean oneway_nurRueckrichtung = false;
 						//boolean has_oneway = false;
 						boolean is_oneway = false;
@@ -654,7 +728,8 @@ public class OSMParser {
 							}
 						}
 						
-						
+						// split/copy way with n wayParts to n new ways
+						// create und save way/ways to new file (note way direction (oneway))
 						for (int i = 0; i < way2List.size() - 1; i++) {
 							
 							s = way2List.get(i).split("<nd ref=\"",2)[1].split("\"",2)[0];
@@ -856,12 +931,11 @@ public class OSMParser {
 								}
 								
 							}
-							
-	
 						}
 						
 					}
 					
+				// read relation-Tag, but to not copy/save it to the new file
 				} else if ( tline.startsWith("<relation id=\"")) {
 				
 					String s = tline.replace("<relation id=\"", "").split("\"")[0];
@@ -891,12 +965,14 @@ public class OSMParser {
 						System.out.println("Error: Ende von relation: " + id);
 					}
 					
+				// copy/save bounds-Tag
 				} else if (tline.startsWith("<bounds minlat=")) {					
 					bWriter.write("	<bounds minlat=\"" + minlat + "\" minlon=\"" + minlon + "\" maxlat=\"" + maxlat + "\" maxlon=\"" + maxlon + "\"/>" + System.lineSeparator());
+
+				// copy/save unknown-Tag 
 				} else {
 					bWriter.write(line + System.lineSeparator());
 				}
-				
 				
 				line = bReader.readLine();
 				lineNR++;
@@ -916,12 +992,15 @@ public class OSMParser {
 		
 	}
 	
+	/**
+	 * check if bit for this means of transport is set
+	 */
 	public static boolean getMeansOfTransportPermission(final int transportFlag)
 	{
-		//check if bit for this means of transport is set
 		return ((meansOfTransport & transportFlag) != 0);
 	}
 	
+
 	public static void set_meansOfTransport(long id) {
 		//transform Highway string to integer
 		int highwayType = highwayType(highway);
@@ -934,17 +1013,26 @@ public class OSMParser {
 			meansOfTransport |= OSMParser.CAR;		
 	}
 	
+	/**
+	 * return highwayType as int from highway
+	 */
 	public static int highwayType(String highway){
 		for (int i=0;i<highwayTypes.length;i++){
 			if (highwayTypes[i].equals(highway))
 				return i;
 		}
-		//System.out.println("Warning, unknown highway type: "+highway);
 		return -1;
 	}
 
+	/**
+	 * Returns a value that shows if a car may drive on this way.
+	 * 
+	 * @param highwayType
+	 * @param motorcar
+	 * @param id
+	 * @return 0 = not allowed, 1 = restricted, 2 = allowed
+	 */
 	public static int carPermission(int highwayType, String motorcar,long id){
-		
 		
 		// highway types usually intended for car
 		if (highwayType>=0 && highwayType<=29)
@@ -1004,6 +1092,7 @@ public class OSMParser {
 	
 }
 
+// helper class with GPS coordinates
 class nodeGps
 {
 	public double lat;
